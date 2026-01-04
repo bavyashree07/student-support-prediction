@@ -1,66 +1,40 @@
-# app.py
 import streamlit as st
 import pandas as pd
 import pickle
 
-st.set_page_config(page_title="Student Support Prediction", layout="centered")
+# Load trained model
+with open("student_model.pkl", "rb") as f:
+    model = pickle.load(f)
 
-st.title("🎓 Student Support Prediction")
+st.title("🎓 Student Support Priority Prediction")
+st.write("Enter student details to predict support priority")
 
-# ----------------------
-# Load the trained model
-# ----------------------
-try:
-    with open("student_model.pkl", "rb") as f:
-        model = pickle.load(f)
-except FileNotFoundError:
-    st.error("❌ Model file 'student_model.pkl' not found! Make sure it is in the same folder as app.py.")
-    st.stop()
+# ---- USER INPUTS ----
+orphan = st.selectbox("Is the student an Orphan?", ["No", "Yes"])
+dropout = st.selectbox("Is the student a Dropout?", ["No", "Yes"])
+bpl = st.selectbox("Below Poverty Line (BPL)?", ["No", "Yes"])
 
-# ----------------------
-# Input form for new student
-# ----------------------
-st.header("Enter Student Details:")
+income = st.number_input("Family Annual Income", min_value=0)
+risk_score = st.slider("Risk Severity Score", 0, 10, 5)
 
-with st.form("student_form"):
-    student_id = st.text_input("Student ID")
-    orphan = st.selectbox("Orphan?", ["No", "Yes"])
-    dropout = st.selectbox("Dropout?", ["No", "Yes"])
-    bpl = st.selectbox("Below Poverty Line?", ["No", "Yes"])
-    education_level = st.selectbox("Education Level", ["Below 12th", "Completed 12th", "Graduated"])
-    family_status = st.selectbox("Family Status", ["Both Parents", "Single Parent", "No Parents"])
-    annual_income = st.number_input("Family Annual Income", min_value=0)
-    risk_severity_score = st.number_input("Risk Severity Score", min_value=0)
+# Convert inputs
+data = {
+    "Orphan": 1 if orphan == "Yes" else 0,
+    "Dropout": 1 if dropout == "Yes" else 0,
+    "Below_Poverty_Line": 1 if bpl == "Yes" else 0,
+    "family_annual_income": income,
+    "risk_severity_score": risk_score
+}
 
-    submitted = st.form_submit_button("Predict Support Priority")
+input_df = pd.DataFrame([data])
 
-# ----------------------
-# Process input and predict
-# ----------------------
-if submitted:
-    # Convert inputs to DataFrame
-    input_data = pd.DataFrame({
-        "orphan": [1 if orphan=="Yes" else 0],
-        "dropout": [1 if dropout=="Yes" else 0],
-        "below_poverty_line": [1 if bpl=="Yes" else 0],
-        "education_level": [education_level],
-        "family_status": [family_status],
-        "family_annual_income": [annual_income],
-        "risk_severity_score": [risk_severity_score]
-    })
+# ---- PREDICTION ----
+if st.button("Predict Support Level"):
+    prediction = model.predict(input_df)[0]
 
-    try:
-        prediction = model.predict(input_data)[0]
-        if prediction == 1:
-            result = "✅ Help Needed"
-        elif prediction == 2:
-            result = "⚠️ Intermediate Support Needed"
-        elif prediction == 3:
-            result = "🔥 Urgent Support Needed"
-        else:
-            result = "Unknown"
-
-        st.success(f"Prediction for Student {student_id}: {result}")
-
-    except Exception as e:
-        st.error(f"Error during prediction: {e}")
+    if prediction == 3:
+        st.error("🚨 URGENT HELP NEEDED")
+    elif prediction == 2:
+        st.warning("⚠️ INTERMEDIATE HELP NEEDED")
+    else:
+        st.success("✅ HELP NEEDED (LOW PRIORITY)")
